@@ -1,0 +1,6 @@
+{
+  "name": "AI Content Creator",
+  "description": "A suite of AI-powered creative tools for generating YouTube titles, viral hooks, social captions, video scripts, hashtags, and multi-platform content.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

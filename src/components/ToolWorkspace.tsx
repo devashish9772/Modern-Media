@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleGenAI } from '@google/genai';
 import { ToolMeta, ToolId, SavedItem } from '../types';
 import { TOOLS } from '../data/tools';
 import { PRESET_IDEAS } from '../data/presets';
@@ -101,6 +102,7 @@ export const ToolWorkspace: React.FC<Props> = ({
     setSaved(false);
 
     try {
+      // 1. Try Express backend endpoint
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -110,12 +112,35 @@ export const ToolWorkspace: React.FC<Props> = ({
         }),
       });
 
-      const json = await res.json();
-      if (!json.success) {
-        throw new Error(json.error || 'Generation failed.');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          setOutput(json.data);
+          return;
+        }
       }
 
-      setOutput(json.data);
+      // 2. If server API returned error or 404 (e.g. GitHub Pages static deployment), fallback to client-side
+      const apiKey = (import.meta as any).env?.VITE_GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error(
+          'Static deployment detected (e.g. GitHub Pages). To run AI generation on static hosts, set VITE_GEMINI_API_KEY in your environment variables.'
+        );
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      let prompt = `Generate JSON response for tool ${toolId} with inputs: ${JSON.stringify(inputs)}`;
+      
+      const clientRes = await ai.models.generateContent({
+        model: 'gemini-3.6-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const parsed = JSON.parse(clientRes.text || '{}');
+      setOutput(parsed);
     } catch (err: any) {
       setError(err.message || 'Failed to generate AI content.');
     } finally {

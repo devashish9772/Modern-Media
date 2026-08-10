@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 // API Health Check
 app.get("/api/health", (req, res) => {
@@ -18,7 +18,7 @@ app.get("/api/health", (req, res) => {
 
 // Helper to initialize Gemini SDK safely
 function getGeminiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY environment variable is required.");
   }
@@ -38,154 +38,300 @@ app.post("/api/generate", async (req, res) => {
     const { toolType, inputs } = req.body;
 
     if (!toolType) {
-      return res.status(400).json({ error: "toolType is required" });
+      return res.status(400).json({ success: false, error: "toolType is required" });
     }
 
     const ai = getGeminiClient();
+    const lang = inputs.language || "English";
 
     let prompt = "";
-    let systemInstruction = "You are a world-class social media strategist, YouTube growth expert, and viral content creator. Produce crisp, high-converting, creative content without filler phrases like 'Sure, here is your content'. Output well-formatted response.";
+    const systemInstruction = `You are Modern Media's elite AI Content Strategist & Media Producer. Output language MUST BE: ${lang}. Produce crisp, high-converting, viral content without conversational filler (like "Sure, here is your output"). Always return strict, valid JSON without extra markdown backticks if possible, or standard clean JSON.`;
 
-    if (toolType === "youtube_title") {
-      prompt = `Generate 5 high-CTR YouTube title ideas for:
-Topic/Idea: "${inputs.topic || ''}"
-Niche: ${inputs.niche || 'General'}
-Target Audience: ${inputs.audience || 'General Viewers'}
-Desired Tone: ${inputs.tone || 'High CTR'}
+    switch (toolType) {
+      case "youtube_title": {
+        prompt = `Generate AT LEAST 10 high-CTR YouTube title suggestions in ${lang} for:
+Video Topic: "${inputs.topic || ''}"
+Keywords: "${inputs.keywords || ''}"
+Category: "${inputs.category || 'General'}"
+Tone: "${inputs.tone || 'High CTR'}"
+Target Audience: "${inputs.audience || 'General Viewers'}"
+
+Generate at least 10 titles distributed across these 5 required categories:
+1. "SEO" (SEO-friendly)
+2. "Curiosity" (Curiosity-based / Gap)
+3. "Professional" (Clean, authoritative)
+4. "Short" (Punchy, under 45 chars)
+5. "Emotional" (Relatable / High impact)
 
 For each title, provide:
-1. The catchy Title string (under 60 characters preferred)
-2. Estimated CTR Score (out of 100)
-3. Psychological Trigger / Angle (e.g. Curiosity, Fear Of Missing Out, Direct Benefit, Controversy)
-4. Suggested Thumbnail Text (2-4 words MAX to pair with this title)
+- title: string
+- ctrScore: number (between 85 and 99)
+- angle: string (e.g. "Curiosity Gap", "Keyword Dominance", "Pain Point")
+- thumbnailText: string (2-4 punchy words for thumbnail overlay)
+- categoryType: strictly one of ["SEO", "Curiosity", "Professional", "Short", "Emotional"]
 
-Return the response as a JSON object with this exact structure:
+Return JSON object:
 {
   "titles": [
     {
-      "title": "Title text here",
-      "ctrScore": 94,
+      "title": "Title here...",
+      "ctrScore": 96,
       "angle": "Curiosity Gap",
-      "thumbnailText": "DON'T DO THIS",
-      "characterCount": 42
+      "thumbnailText": "STOP DOING THIS",
+      "categoryType": "Curiosity"
     }
   ],
-  "proTip": "A 1-sentence growth tip for this video concept"
+  "proTip": "A 1-2 sentence pro growth tip for this video topic."
 }`;
-    } else if (toolType === "caption_generator") {
-      prompt = `Write a viral social media caption for:
-Topic/Concept: "${inputs.topic || ''}"
-Target Platform: ${inputs.platform || 'Instagram'}
-Tone of Voice: ${inputs.tone || 'Engaging'}
-Call to Action: ${inputs.cta || 'Engage in comments'}
-Key Takeaways/Context: "${inputs.context || ''}"
+        break;
+      }
 
-Please format the response with:
-- An attention-grabbing Hook line (first sentence)
-- Well-spaced body content with relevant emojis and line breaks
-- Clear Call-To-Action (CTA)
-- 5 targeted, high-performing hashtags at the bottom
+      case "caption_generator": {
+        prompt = `Generate engaging, platform-tailored social media captions in ${lang} for:
+Topic/Idea: "${inputs.topic || ''}"
+Platform Focus: "${inputs.platform || 'All Platforms (Instagram, YouTube, Facebook, Shorts, Reels)'}"
+Desired Tone: "${inputs.tone || 'Engaging & Authentic'}"
 
-Return a JSON object:
+Generate 5 distinct caption variations, each customized for:
+1. Instagram
+2. YouTube (Video / Community)
+3. Facebook
+4. YouTube Shorts
+5. Instagram Reels
+
+Return JSON object:
 {
-  "hook": "First line hook here",
-  "fullCaption": "Full formatted caption ready to copy...",
-  "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-  "engagementScore": "Estimated 9/10",
-  "bestTimeToPostAdvice": "Short 1-line tip on when to post this"
-}`;
-    } else if (toolType === "script_outline") {
-      prompt = `Create a complete video script outline for:
-Topic: "${inputs.topic || ''}"
-Format/Length: ${inputs.format || 'YouTube (5-10 min)'}
-Target Audience: ${inputs.audience || 'General'}
-Core Goal: ${inputs.goal || 'Educational & Entertaining'}
-
-Provide a structured Markdown breakdown containing:
-1. **HOOK (0:00 - 0:05)**: Pattern interrupt verbal line + Visual/B-roll cue.
-2. **THE PROMISE (0:05 - 0:20)**: Why they should watch until the end.
-3. **CORE SEGMENTS**:
-   - **Segment 1**: Key Point + On-Screen Graphic/B-Roll suggestion + Script notes.
-   - **Segment 2**: Key Point + On-Screen Graphic/B-Roll suggestion + Script notes.
-   - **Segment 3**: Key Point + On-Screen Graphic/B-Roll suggestion + Script notes.
-4. **RETENTION BOOST / MID-VIDEO RE-HOOK**: A surprise element or question.
-5. **CALL TO ACTION & OUTRO**: Natural segue into next video or subscribe prompt.
-
-Return the response as JSON:
-{
-  "title": "Working Title",
-  "estimatedDuration": "Format duration",
-  "markdownScript": "Markdown content here...",
-  "keyTakeaways": ["Takeaway 1", "Takeaway 2", "Takeaway 3"]
-}`;
-    } else if (toolType === "viral_hooks") {
-      prompt = `Generate 5 viral video hooks for short-form video (Reels/TikTok/Shorts):
-Video Concept: "${inputs.topic || ''}"
-Value/Target Outcome: "${inputs.value || ''}"
-
-Provide 5 different angles:
-1. **Pattern Interrupt** (Stop scrolling, unexpected statement)
-2. **Bold Claim** (Results-first, shocking stat or outcome)
-3. **Story Teaser** (Relatable struggle to solution)
-4. **Secret/Hack** ("The hidden setting nobody talks about...")
-5. **Mistake Avoidance** ("Stop doing this immediately if you want...")
-
-Return JSON:
-{
-  "hooks": [
+  "captions": [
     {
-      "angleName": "Pattern Interrupt",
-      "verbalHook": "Exact line to speak in first 2 seconds",
-      "visualAction": "On-screen motion/gesture/b-roll idea",
-      "textOverlay": "3-word text on screen"
+      "platform": "Instagram",
+      "hook": "Scroll-stopping first line...",
+      "text": "Full caption body formatted with line breaks, emojis, and valuable insights...",
+      "cta": "Call to action line...",
+      "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"]
     }
   ]
 }`;
-    } else if (toolType === "hashtag_generator") {
-      prompt = `Generate an SEO keyword and hashtag package for:
-Topic/Niche: "${inputs.topic || ''}"
-Platform: ${inputs.platform || 'Instagram & TikTok'}
+        break;
+      }
 
-Provide:
-1. **Massive Reach Hashtags** (1M+ posts) - 5 tags
-2. **Targeted Niche Hashtags** (50k - 500k posts) - 5 tags
-3. **Low Competition / High Conversion Hashtags** (<50k posts) - 5 tags
-4. **Top 10 SEO Search Keywords** for caption/transcript optimization
+      case "description_generator": {
+        prompt = `Generate a complete, high-ranking video description package in ${lang} for:
+Topic: "${inputs.topic || ''}"
+Platform: "${inputs.platform || 'YouTube'}"
+Keywords: "${inputs.keywords || ''}"
+Tone: "${inputs.tone || 'Professional & Informative'}"
 
-Return JSON:
+Include:
+1. SEO-friendly description (Detailed 2-3 paragraph description with keywords embedded)
+2. Short description (2-sentence summary for preview cards / social shares)
+3. Long description (Extended version with timestamp outline markers)
+4. Call-to-action (Subscribe, comment, and link prompts)
+5. Relevant keywords list (10 comma-separated keywords)
+6. Relevant hashtags list (8-10 targeted hashtags)
+
+Return JSON object:
 {
-  "massiveReach": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-  "targetedNiche": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-  "lowCompetition": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-  "seoKeywords": ["keyword 1", "keyword 2", "keyword 3", "keyword 4", "keyword 5", "keyword 6", "keyword 7", "keyword 8", "keyword 9", "keyword 10"],
-  "copyAllHashtagsString": "#tag1 #tag2 ... (all 15 combined)"
+  "seoDescription": "Full SEO description...",
+  "shortDescription": "2-sentence punchy summary...",
+  "longDescription": "Extended breakdown with chapter markers...",
+  "callToAction": "Clear call to action string...",
+  "keywords": ["keyword 1", "keyword 2", "keyword 3"],
+  "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3"]
 }`;
-    } else if (toolType === "content_repurposer") {
-      prompt = `Repurpose this core content into 4 distinct social media formats:
-Source Content: "${inputs.sourceText || ''}"
+        break;
+      }
+
+      case "hashtag_generator": {
+        prompt = `Generate an optimized hashtag strategy in ${lang} for:
+Topic/Niche: "${inputs.topic || ''}"
+Platform: "${inputs.platform || 'Instagram / TikTok'}"
+
+Group hashtags into 3 volume tiers:
+1. Popular (High volume / broad reach, 5-8 tags)
+2. Niche (Targeted community tags, 5-8 tags)
+3. Long-tail (Specific low-competition conversion tags, 5-8 tags)
+
+Also generate a combined copyAllString containing all hashtags separated by spaces.
+
+Return JSON object:
+{
+  "popular": ["#popular1", "#popular2"],
+  "niche": ["#niche1", "#niche2"],
+  "longTail": ["#longtail1", "#longtail2"],
+  "copyAllString": "#popular1 #popular2 #niche1 #niche2 #longtail1 #longtail2"
+}`;
+        break;
+      }
+
+      case "video_idea_generator": {
+        const count = inputs.count || 5;
+        prompt = `Generate ${count} unique, high-potential video/reel concepts in ${lang} for:
+Topic/Niche: "${inputs.topic || ''}"
+Platform: "${inputs.platform || 'YouTube / Reels / Shorts'}"
+
+For each idea, provide:
+- title: Catchy proposed video title
+- hook: 3-second opening visual/verbal hook
+- concept: Brief description of the plot, storytelling angle, or takeaway
+- format: Recommended format (e.g., Talking Head with B-Roll, Screen Recording, Vlog Style, Skit, Side-by-Side Comparison)
+
+Return JSON object:
+{
+  "ideas": [
+    {
+      "title": "Proposed Title",
+      "hook": "Opening hook...",
+      "concept": "Concept details...",
+      "format": "Suggested format"
+    }
+  ]
+}`;
+        break;
+      }
+
+      case "script_generator": {
+        prompt = `Write a complete, professional video script in ${lang} for:
+Format/Style: "${inputs.style || inputs.platform || 'YouTube'}" (e.g. YouTube, Shorts, Reels, Documentary, Educational, Storytelling, Review)
+Topic: "${inputs.topic || ''}"
+Duration: "${inputs.duration || '5 minutes'}"
+Tone: "${inputs.tone || 'Engaging & Authoritative'}"
+Target Audience: "${inputs.audience || 'General Creators'}"
+
+Structure the script cleanly with these exact sections:
+- HOOK: Pattern-interrupt line and visual action
+- INTRODUCTION: Theme statement, promise of value, and intro
+- MAIN CONTENT: Step-by-step breakdown with visual/B-roll cues
+- ENDING: Conclusion summary and retention loop
+- CTA: Direct call to action (subscribe, comment, click link)
+
+Return JSON object:
+{
+  "title": "Script Title",
+  "platform": "${inputs.style || 'YouTube'}",
+  "duration": "${inputs.duration || '5 mins'}",
+  "hook": "Hook text & visual cue...",
+  "introduction": "Intro content...",
+  "mainContent": "Main body breakdown with timestamps & B-roll...",
+  "ending": "Ending summary...",
+  "callToAction": "Call to action..."
+}`;
+        break;
+      }
+
+      case "thumbnail_prompt": {
+        prompt = `Generate an ultra-detailed AI image-generation prompt (for Midjourney v6 / DALL-E 3) in ${lang} for a high-CTR YouTube thumbnail based on:
+Video Topic: "${inputs.topic || ''}"
+Main Subject: "${inputs.subject || 'Expressive Creator holding tech gadget'}"
+Mood/Vibe: "${inputs.mood || 'Dramatic & High Energy'}"
+Style: "${inputs.style || '3D Digital Art / Photorealistic Hyper-detailed'}"
+Platform: "${inputs.platform || 'YouTube Thumbnail'}"
+
+DO NOT use copyrighted characters or imitate living artists' exact signature styles.
+
+Break down the image parameters:
+- composition: Framing, placement, rule of thirds
+- subject: Foreground focal point, clothes, stance
+- background: Background elements, environment, depth blur
+- lighting: Studio lighting, rim light, glow effects
+- cameraAngle: Wide angle, low angle, eye level
+- colors: Vibrant color palette (e.g. Neon Amber & Deep Cyan)
+- facialExpression: Expressive face (e.g. Shocked, Intense Focus)
+- typographyPlacement: Recommended text placement & 2-3 word bold text
+- aspectRatio: "16:9"
+- detailInstructions: Complete consolidated prompt string ready to copy into Midjourney/DALL-E.
+
+Return JSON object:
+{
+  "prompt": "Full consolidated prompt string...",
+  "composition": "Composition details...",
+  "subject": "Subject details...",
+  "background": "Background details...",
+  "lighting": "Lighting details...",
+  "cameraAngle": "Camera angle...",
+  "colors": "Color palette...",
+  "facialExpression": "Facial expression...",
+  "typographyPlacement": "Text overlay placement...",
+  "aspectRatio": "16:9",
+  "detailInstructions": "Rendering engine parameters (--ar 16:9 --v 6.0 --style raw)"
+}`;
+        break;
+      }
+
+      case "seo_keyword": {
+        prompt = `Generate an exhaustive SEO Keyword research package in ${lang} for:
+Topic: "${inputs.topic || ''}"
+Platform: "${inputs.platform || 'YouTube & Google Search'}"
 
 Generate:
-1. **Twitter/X Thread**: 4-5 connected tweets.
-2. **LinkedIn Post**: Professional story/insight format with bullet points and strong spacing.
-3. **Instagram Carousel Outline**: 5 Slide breakdown (Slide 1 Hook, Slide 2-4 Value, Slide 5 CTA).
-4. **Short Video Script (Reel/Short)**: 30-40 second talking head script.
+1. Primary Keywords (5 high-volume seed keywords)
+2. Secondary Keywords (8 supporting semantic keywords)
+3. Long-Tail Keywords (8 specific query phrases)
+4. Search-Intent Suggestions (5 user questions & problem intent queries)
 
-Return JSON:
+Also provide copyAllString combining all keywords cleanly.
+
+Return JSON object:
 {
-  "twitterThread": ["Tweet 1 text...", "Tweet 2 text...", "Tweet 3 text...", "Tweet 4 text...", "Tweet 5 text..."],
-  "linkedInPost": "Full formatted LinkedIn post...",
-  "instagramCarousel": [
-    { "slideNumber": 1, "title": "Slide Title", "content": "Bullet points or text" },
-    { "slideNumber": 2, "title": "Slide Title", "content": "Bullet points or text" },
-    { "slideNumber": 3, "title": "Slide Title", "content": "Bullet points or text" },
-    { "slideNumber": 4, "title": "Slide Title", "content": "Bullet points or text" },
-    { "slideNumber": 5, "title": "Slide Title", "content": "CTA Slide content" }
-  ],
-  "shortVideoScript": "Short video script..."
+  "primaryKeywords": ["kw1", "kw2"],
+  "secondaryKeywords": ["kw1", "kw2"],
+  "longTailKeywords": ["kw1", "kw2"],
+  "searchIntentSuggestions": ["query 1", "query 2"],
+  "copyAllString": "kw1, kw2, kw3..."
 }`;
-    } else {
-      // Fallback
-      prompt = `Generate creative content based on request: ${JSON.stringify(inputs)}`;
+        break;
+      }
+
+      case "content_hook": {
+        prompt = `Generate 6 high-converting opening hooks in ${lang} for:
+Topic: "${inputs.topic || ''}"
+Target Platform: "${inputs.platform || 'Shorts / Reels / TikTok'}"
+
+Provide 1 hook for each of these 6 required categories:
+1. "Curiosity"
+2. "Question"
+3. "Story"
+4. "Emotional"
+5. "Educational"
+6. "Unexpected fact"
+
+Return JSON object:
+{
+  "hooks": [
+    {
+      "category": "Curiosity",
+      "platform": "${inputs.platform || 'Reels'}",
+      "hookText": "Opening spoken line...",
+      "reason": "Why this hook triggers dopamine and stops scrolling"
+    }
+  ]
+}`;
+        break;
+      }
+
+      case "content_improver": {
+        prompt = `Analyze and improve this content text in ${lang}:
+Original Text: "${inputs.originalText || ''}"
+Improvement Goal: "${inputs.option || 'Make it more engaging, concise & professional'}"
+
+Provide:
+1. improvedText: Fully rewritten, polished text
+2. changesMade: List of 3-4 specific edits (e.g. "Removed passive voice", "Enhanced hook punchiness", "Optimized line breaks")
+3. summary: Short 1-sentence explanation of why the improved version performs better.
+
+Return JSON object:
+{
+  "originalText": "${inputs.originalText || ''}",
+  "improvedText": "Enhanced text...",
+  "changesMade": ["Edit 1", "Edit 2", "Edit 3"],
+  "summary": "Summary of enhancements..."
+}`;
+        break;
+      }
+
+      default: {
+        prompt = `Generate creative media output for: ${JSON.stringify(inputs)}`;
+        break;
+      }
     }
 
     const response = await ai.models.generateContent({
@@ -208,15 +354,60 @@ Return JSON:
     return res.json({ success: true, data: parsedData });
   } catch (error: any) {
     console.error("Error in /api/generate:", error);
+    const errorMessage = error?.status === 429 || error?.message?.includes("quota")
+      ? "AI usage limit reached. Please try again later or configure another supported API/model."
+      : error.message || "Failed to generate AI content.";
+
     return res.status(500).json({
       success: false,
-      error: error.message || "Failed to generate AI content",
+      error: errorMessage,
+    });
+  }
+});
+
+// AI Chat Route for Assistant
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { messages, userMessage } = req.body;
+    const ai = getGeminiClient();
+
+    const systemInstruction = `You are Modern Media's AI Media Assistant. You specialize in YouTube growth, social media strategy, video scripting, SEO, thumbnail prompts, and content planning. Give concise, actionable, creator-focused advice with clear bullet points, title ideas, or script frameworks when asked.`;
+
+    const formattedHistory = (messages || []).map((m: any) => ({
+      role: m.sender === 'user' ? 'user' : 'model',
+      parts: [{ text: m.text }],
+    }));
+
+    // Add current user message
+    formattedHistory.push({
+      role: 'user',
+      parts: [{ text: userMessage || 'Hello' }],
+    });
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.6-flash",
+      contents: formattedHistory,
+      config: {
+        systemInstruction,
+      },
+    });
+
+    const reply = response.text || "I'm here to help with your media content strategy!";
+    return res.json({ success: true, reply });
+  } catch (error: any) {
+    console.error("Error in /api/chat:", error);
+    const errorMessage = error?.status === 429 || error?.message?.includes("quota")
+      ? "AI usage limit reached. Please try again later or configure another supported API/model."
+      : error.message || "Failed to generate AI chat response.";
+
+    return res.status(500).json({
+      success: false,
+      error: errorMessage,
     });
   }
 });
 
 async function startServer() {
-  // Vite middleware for development mode
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

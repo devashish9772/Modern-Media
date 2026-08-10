@@ -4,17 +4,24 @@ import { TOOLS } from './data/tools';
 import { Header } from './components/Header';
 import { ToolGrid } from './components/ToolGrid';
 import { ToolWorkspace } from './components/ToolWorkspace';
+import { AIAssistant } from './components/AIAssistant';
+import { MediaTools } from './components/MediaTools';
+import { VideoTools } from './components/VideoTools';
+import { AudioTools } from './components/AudioTools';
 import { LibraryModal } from './components/LibraryModal';
 import { PresetsModal } from './components/PresetsModal';
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<string>('ai_tools');
   const [activeToolId, setActiveToolId] = useState<ToolId | null>(null);
-  const [activePresetInputs, setActivePresetInputs] = useState<Record<string, any> | undefined>(undefined);
+  const [activePresetInputs, setActivePresetInputs] = useState<Record<string, any> | undefined>(
+    undefined
+  );
 
   // Saved items from LocalStorage
   const [savedItems, setSavedItems] = useState<SavedItem[]>(() => {
     try {
-      const stored = localStorage.getItem('ai_content_creator_library');
+      const stored = localStorage.getItem('modern_media_library');
       return stored ? JSON.parse(stored) : [];
     } catch (e) {
       return [];
@@ -28,7 +35,7 @@ export default function App() {
   // Sync saved items to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('ai_content_creator_library', JSON.stringify(savedItems));
+      localStorage.setItem('modern_media_library', JSON.stringify(savedItems));
     } catch (e) {
       console.error('Failed to persist library:', e);
     }
@@ -49,52 +56,78 @@ export default function App() {
   };
 
   const handleSelectPreset = (toolId: ToolId, inputs: Record<string, any>) => {
+    setActiveTab('ai_tools');
     setActiveToolId(toolId);
     setActivePresetInputs(inputs);
+  };
+
+  const handleSelectTool = (toolId: ToolId) => {
+    if (toolId === 'ai_assistant') {
+      setActiveTab('ai_assistant');
+      setActiveToolId(null);
+    } else if (toolId === 'media_tools') {
+      setActiveTab('media_tools');
+      setActiveToolId(null);
+    } else if (toolId === 'video_tools') {
+      setActiveTab('video_tools');
+      setActiveToolId(null);
+    } else if (toolId === 'audio_tools') {
+      setActiveTab('audio_tools');
+      setActiveToolId(null);
+    } else {
+      setActiveTab('ai_tools');
+      setActiveToolId(toolId);
+    }
   };
 
   const activeToolMeta = TOOLS.find(t => t.id === activeToolId);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500 selection:text-white flex flex-col">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans selection:bg-amber-500 selection:text-zinc-950 flex flex-col">
       {/* Header */}
       <Header
         savedCount={savedItems.length}
-        onOpenLibrary={() => setIsLibraryOpen(true)}
-        onOpenPresets={() => setIsPresetsOpen(true)}
-        onResetToGrid={() => {
+        activeTab={activeTab}
+        onSelectTab={tab => {
+          setActiveTab(tab);
           setActiveToolId(null);
           setActivePresetInputs(undefined);
         }}
-        activeToolTitle={activeToolMeta?.title}
+        onOpenLibrary={() => setIsLibraryOpen(true)}
+        onOpenPresets={() => setIsPresetsOpen(true)}
+        activeToolTitle={activeToolId ? activeToolMeta?.title : undefined}
       />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-6">
-        {activeToolId ? (
-          <ToolWorkspace
-            toolId={activeToolId}
-            onBack={() => {
-              setActiveToolId(null);
-              setActivePresetInputs(undefined);
-            }}
-            onSaveItem={handleSaveItem}
-            savedItemIds={savedItems.map(s => s.id)}
-            initialInputs={activePresetInputs}
-          />
-        ) : (
-          <ToolGrid
-            onSelectTool={id => {
-              setActiveToolId(id);
-              setActivePresetInputs(undefined);
-            }}
-          />
+        {activeTab === 'ai_tools' && (
+          <>
+            {activeToolId ? (
+              <ToolWorkspace
+                toolId={activeToolId}
+                onBack={() => {
+                  setActiveToolId(null);
+                  setActivePresetInputs(undefined);
+                }}
+                onSaveItem={handleSaveItem}
+                savedItemIds={savedItems.map(s => s.id)}
+                initialInputs={activePresetInputs}
+              />
+            ) : (
+              <ToolGrid onSelectTool={handleSelectTool} />
+            )}
+          </>
         )}
+
+        {activeTab === 'media_tools' && <MediaTools />}
+        {activeTab === 'video_tools' && <VideoTools />}
+        {activeTab === 'audio_tools' && <AudioTools />}
+        {activeTab === 'ai_assistant' && <AIAssistant />}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-6 text-center text-xs text-slate-500">
-        AI Content Creator • Powered by Gemini 3.6 Flash Server Engine
+      <footer className="border-t border-zinc-900 bg-zinc-950 py-6 text-center text-xs text-zinc-500">
+        <span className="font-extrabold text-amber-400">MODERN MEDIA</span> • Golden AI Content & Media Suite • Powered by Gemini 3.6 Flash Server Engine
       </footer>
 
       {/* Modals */}
@@ -113,4 +146,4 @@ export default function App() {
       />
     </div>
   );
-}
+};
